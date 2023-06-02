@@ -10,3 +10,5 @@ L(x) is defined as if the digit is even (label 0) or odd (label 1)
 We find the estimation (a tight lower bound) of I(x,L(x)) using neural estimation
 
 Theoretically, if we can identify the digit given an image, I(x,L(x))=H(L(x)). For a balanced dataset, H(L(x))=log(2)=0.6931
+
+You need to create two folders: "data" and "figures" for the intermediate results
