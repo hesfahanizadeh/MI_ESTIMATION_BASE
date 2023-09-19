@@ -1,5 +1,5 @@
 # Title: Base framework for estimation of Mutual Information using Neural Networks
-# Last Update: 06/02/2023
+# Last Update: 09/19/2023
 # Developers: Homa Esfahanizadeh and William (Bill) Wu
 # Based on and Inspired by the public repositories of the following papers:
 #  I. Belghazi, S. Rajeswar, A.  Baratin, R. D. Hjelm, and A. C. Courville, “MINE: mutual information neural estimation,” PMLR, 2018.
@@ -34,6 +34,7 @@ from sklearn.model_selection import train_test_split
 # %% Set Cpmputing Device and Set Random Seed
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'   #cuda:0 or cuda:1 for our 2-GPU testbed
 num_gpus = 1 if device=='cuda:0' else 0
+#device = 'cpu'
 print(device)
 
 seed = 1
@@ -132,7 +133,8 @@ class Mine(nn.Module):
 class MutualInformationEstimator(pl.LightningModule):
     def __init__(self, loss='mine', **kwargs):
         super().__init__()
-        self.energy_loss = kwargs.get('mine')
+        self.automatic_optimization = False
+        self.energy_loss = kwargs.get(loss)
         self.file_name = kwargs.get('file_name') + ".txt"
         self.kwargs = kwargs
         self.gradient_batch_size = kwargs.get('gradient_batch_size', 1)
@@ -160,6 +162,12 @@ class MutualInformationEstimator(pl.LightningModule):
             z = z.to(device)
 
         loss = self.energy_loss(x, z).to(device)
+        
+        opt = self.optimizers()
+        opt.zero_grad()
+        self.manual_backward(loss)
+        opt.step()
+        
         mi = -loss
         tensorboard_logs = {'loss': loss, 'mi': mi}
         tqdm_dict = {'loss_tqdm': loss, 'mi': mi}
@@ -178,12 +186,6 @@ class MutualInformationEstimator(pl.LightningModule):
             **tensorboard_logs, 'log': tensorboard_logs, 'progress_bar': tqdm_dict
         }
         
-    def optimizer_step(self, epoch: int, batch_idx: int, optimizer, optimizer_idx: int = 0, optimizer_closure = None, on_tpu: bool = False, using_native_amp: bool = False, using_lbfgs: bool = False):
-        if batch_idx % self.gradient_batch_size == 0:
-            optimizer.step(closure=optimizer_closure)
-        else:
-            # REFACTOR: Aassumes optimizer closure always non-null
-            optimizer_closure()
 
     def optimizer_zero_grad(self, epoch: int, batch_idx: int, optimizer, optimizer_idx: int):
         if batch_idx % self.gradient_batch_size == 0:
@@ -255,7 +257,8 @@ logger = TensorBoardLogger(
 
 model = MutualInformationEstimator(loss='mine', **kwargs).to(device)
 
-trainer = Trainer(max_epochs=MINE_EPOCHS, logger=logger, gpus=1)
+trainer = Trainer(max_epochs=MINE_EPOCHS, logger=logger, accelerator=device)
+#trainer = Trainer(max_epochs=MINE_EPOCHS, logger=logger, gpus=1)
 trainer.fit(model)
 
 # # %% Printing MI Estimations
